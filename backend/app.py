@@ -12,7 +12,7 @@ load_dotenv()
 # Project root directory
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 PUBLIC_DIR = os.path.join(ROOT_DIR, 'Public')
-VIEWS_DIR = os.path.join(ROOT_DIR, 'views')
+VIEWS_DIR = ROOT_DIR
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -25,6 +25,16 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 # Razorpay Configuration
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "YOUR_KEY_ID")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "YOUR_KEY_SECRET")
+
+# Gemini Configuration
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-3-flash-preview", contents="Explain how AI works in a few words"
+)
+print(response.text)
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("Warning: SUPABASE_URL or SUPABASE_KEY not found in environment variables.")
@@ -380,9 +390,9 @@ def cancel_membership(email):
             else:
                 raise e
         
+         
         return jsonify({"success": True, "message": "Membership cancelled successfully"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-
 if __name__ == '__main__':
     app.run(port=5000, debug=True)

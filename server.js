@@ -7,6 +7,7 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,11 +23,16 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET'
 });
 
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'Public')));
+app.use(express.static(__dirname)); // Serve HTML files from root
 
 // ============ RAZORPAY ENDPOINTS ============
 
@@ -609,6 +615,53 @@ app.get('/api/stats', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Server error fetching stats'
+        });
+    }
+});
+
+// ============ CHATBOT ENDPOINTS ============
+
+/**
+ * POST /api/chatbot
+ * Send a message to Gemini AI and get a response
+ */
+app.post('/api/chatbot', async (req, res) => {
+    try {
+        const { message, history } = req.body;
+
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                message: 'Message is required'
+            });
+        }
+
+        const chatSession = model.startChat({
+            history: history || [],
+            generationConfig: {
+                maxOutputTokens: 500,
+            },
+        });
+
+        const systemPrompt = "You are Sportify Helper, a friendly AI assistant for Sportify Spots, a sports ground booking platform. " +
+            "You help users with ground bookings, membership plans (PRO - 10% discount, PRO PLUS - 20% discount), " +
+            "pricing (₹500 - ₹2000 per hour), and locations (Chennai, Bangalore, Hyderabad, Mumbai, Delhi). " +
+            "Be concise and helpful. If you don't know something about a specific booking, ask them to check their profile.";
+
+        const result = await chatSession.sendMessage(systemPrompt + "\n\nUser: " + message);
+        const response = await result.response;
+        const text = response.text();
+
+        res.json({
+            success: true,
+            response: text
+        });
+
+    } catch (error) {
+        console.error('Chatbot error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'AI assistant is currently unavailable. Please try again later.'
         });
     }
 });
