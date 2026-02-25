@@ -29,19 +29,32 @@ RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "YOUR_KEY_SECRET")
 # Gemini Configuration
 from google import genai
 
-# Initialize Gemini client (moved from startup to avoid blocking)
-client = None
-try:
-    client = genai.Client()
-except Exception as e:
-    print(f"Warning: Failed to initialize Gemini client: {e}")
-    client = None
+# Lazy initialization - clients are created only when needed
+supabase = None
+rz_client = None
+gemini_client = None
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("Warning: SUPABASE_URL or SUPABASE_KEY not found in environment variables.")
+def get_supabase():
+    global supabase
+    if supabase is None and SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return supabase
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
-rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+def get_razorpay():
+    global rz_client
+    if rz_client is None:
+        rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+    return rz_client
+
+def get_gemini():
+    global gemini_client
+    if gemini_client is None:
+        try:
+            gemini_client = genai.Client()
+        except Exception as e:
+            print(f"Warning: Failed to initialize Gemini client: {e}")
+            gemini_client = None
+    return gemini_client
 
 # ============ STATIC FILES SERVING ============
 
@@ -71,6 +84,7 @@ def serve_images(filename):
 
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     data = request.json
@@ -103,6 +117,7 @@ def signup():
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     data = request.json
@@ -135,6 +150,7 @@ def login():
 
 @app.route('/api/membership/verify', methods=['POST'])
 def verify_membership():
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     data = request.json
@@ -160,7 +176,9 @@ def verify_membership():
 
 @app.route('/api/membership/create-order', methods=['POST'])
 def create_membership_order():
-    data = request.json
+    rz_client = get_razorpay()
+    if not rz_client:
+        return jsonify({"success": False, "message": "Payment service not configured"}), 500
     plan = data.get('plan', 'monthly')
     
     # Prices in INR (will convert to paise)
@@ -190,7 +208,9 @@ def create_membership_order():
 
 @app.route('/api/membership/verify-payment', methods=['POST'])
 def verify_membership_payment():
-    data = request.json
+    rz_client = get_razorpay()
+    if not rz_client:
+        return jsonify({"success": False, "message": "Payment service not configured"}), 500
     try:
         # Verify signature
         params_dict = {
@@ -205,6 +225,7 @@ def verify_membership_payment():
 
 @app.route('/api/membership/checkout', methods=['POST'])
 def checkout():
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     data = request.json
@@ -270,7 +291,9 @@ def checkout():
 
 @app.route('/api/bookings/create-order', methods=['POST'])
 def create_booking_order():
-    data = request.json
+    rz_client = get_razorpay()
+    if not rz_client:
+        return jsonify({"success": False, "message": "Payment service not configured"}), 500
     try:
         amount = int(float(data.get('amount', 0)) * 100) # Razorpay expects amount in paise
         if amount <= 0:
@@ -293,6 +316,7 @@ def create_booking_order():
 
 @app.route('/api/bookings', methods=['POST'])
 def create_booking():
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     data = request.json
@@ -353,7 +377,9 @@ def create_booking():
 
 @app.route('/api/bookings/verify-payment', methods=['POST'])
 def verify_booking_payment():
-    data = request.json
+    rz_client = get_razorpay()
+    if not rz_client:
+        return jsonify({"success": False, "message": "Payment service not configured"}), 500
     try:
         params_dict = {
             'razorpay_order_id': data.get('razorpay_order_id'),
@@ -367,6 +393,7 @@ def verify_booking_payment():
 
 @app.route('/api/membership/<email>', methods=['DELETE'])
 def cancel_membership(email):
+    supabase = get_supabase()
     if not supabase:
         return jsonify({"success": False, "message": "Supabase not configured"}), 500
     try:
