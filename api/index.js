@@ -13,19 +13,42 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 
 // Initialize Supabase Client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase = null;
+try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_KEY;
+    if (supabaseUrl && supabaseKey) {
+        supabase = createClient(supabaseUrl, supabaseKey);
+    }
+} catch (error) {
+    console.error('Failed to initialize Supabase:', error);
+}
 
 // Initialize Razorpay Client
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || 'YOUR_KEY_ID',
-    key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET'
-});
+let razorpay = null;
+try {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (keyId && keySecret) {
+        razorpay = new Razorpay({
+            key_id: keyId,
+            key_secret: keySecret
+        });
+    }
+} catch (error) {
+    console.error('Failed to initialize Razorpay:', error);
+}
 
 // Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+let genAI = null;
+try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+    }
+} catch (error) {
+    console.error('Failed to initialize Gemini AI:', error);
+}
 
 // Middleware
 app.use(bodyParser.json());
@@ -87,6 +110,10 @@ function writeBookings(bookings) {
  */
 app.post('/api/membership/create-order', async (req, res) => {
     try {
+        if (!razorpay) {
+            return res.status(500).json({ success: false, message: 'Payment service not configured' });
+        }
+
         const { plan, email } = req.body;
 
         const prices = {
@@ -148,6 +175,10 @@ app.post('/api/membership/verify-payment', (req, res) => {
  */
 app.post('/api/bookings/create-order', async (req, res) => {
     try {
+        if (!razorpay) {
+            return res.status(500).json({ success: false, message: 'Payment service not configured' });
+        }
+
         const { amount } = req.body; // amount in INR
 
         const options = {
@@ -589,6 +620,13 @@ app.get('/api/stats', async (req, res) => {
  */
 app.post('/api/chatbot', async (req, res) => {
     try {
+        if (!genAI) {
+            return res.status(500).json({
+                success: false,
+                message: 'AI service not configured'
+            });
+        }
+
         const { message } = req.body;
 
         if (!message) {
@@ -598,6 +636,7 @@ app.post('/api/chatbot', async (req, res) => {
             });
         }
 
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `You are a helpful chatbot for Sportify Spots, a sports ground booking platform. 
         Answer user questions about sports grounds, bookings, memberships, and general inquiries.
         Keep responses friendly and concise.
