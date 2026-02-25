@@ -1,7 +1,15 @@
 {
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3"
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend/app.py",
+      "use": "@vercel/python"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "backend/app.py"
+    }
+  ]
 }
