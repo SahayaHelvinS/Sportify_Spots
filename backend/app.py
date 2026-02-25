@@ -396,9 +396,6 @@ def cancel_membership(email):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# Vercel serverless function export
-app = app
-
 # For local development (will be ignored on Vercel)
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
