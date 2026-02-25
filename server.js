@@ -31,7 +31,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'Public')));
+app.use(express.static(path.join(__dirname, 'css, js, Image')));
 app.use(express.static(__dirname)); // Serve HTML files from root
 
 // ============ RAZORPAY ENDPOINTS ============
