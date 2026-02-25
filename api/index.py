@@ -9,9 +9,9 @@ import razorpay
 # Load environment variables
 load_dotenv()
 
-# Project root directory
+# Project root directory (parent of api/)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-PUBLIC_DIR = os.path.join(ROOT_DIR, 'Public')
+PUBLIC_DIR = os.path.join(ROOT_DIR, 'public')  # Changed from 'Public' to 'public'
 VIEWS_DIR = ROOT_DIR
 
 # Initialize Flask app
@@ -396,9 +396,4 @@ def cancel_membership(email):
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# Vercel serverless function export
-app = app
-
-# For local development (will be ignored on Vercel)
-if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+# Vercel will automatically use the Flask app as the serverless function
