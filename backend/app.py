@@ -11,7 +11,7 @@ load_dotenv()
 
 # Project root directory
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-PUBLIC_DIR = os.path.join(ROOT_DIR, 'public')
+PUBLIC_DIR = ROOT_DIR
 VIEWS_DIR = ROOT_DIR
 
 # Initialize Flask app
