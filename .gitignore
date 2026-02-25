@@ -19,3 +19,4 @@ env/
 # Project specific
 temp_patch_login.txt
 *.log
+.vercel

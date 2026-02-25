@@ -703,7 +703,7 @@ app.listen(PORT, () => {
     console.log(`  POST   /api/bookings`);
     console.log(`  GET    /api/bookings/:email`);
     console.log(`  GET    /api/members`);
-    console.log(`  GET    /api/stats`);
 });
 
-module.exports = app;
+const serverless = require('serverless-http');
+module.exports = serverless(app);
