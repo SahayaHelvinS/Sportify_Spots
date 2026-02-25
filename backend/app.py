@@ -26,17 +26,6 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "YOUR_KEY_ID")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "YOUR_KEY_SECRET")
 
-# Gemini Configuration
-from google import genai
-
-# Initialize Gemini client (moved from startup to avoid blocking)
-client = None
-try:
-    client = genai.Client()
-except Exception as e:
-    print(f"Warning: Failed to initialize Gemini client: {e}")
-    client = None
-
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("Warning: SUPABASE_URL or SUPABASE_KEY not found in environment variables.")
 
