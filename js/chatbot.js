@@ -23,7 +23,7 @@
                 </div>
                 <div class="chatbot-messages" id="chatbotMessages">
                     <div class="message bot-message">
-                        Hi! Welcome to Sportify Spots, Angondhalli. How can I help? (Book a ground / Check availability / Pricing / Location / FAQs)
+                        Hi! Welcome to Sportify Spots. How can I help? (Book a ground, check availability, pricing, location, FAQs)
                     </div>
                 </div>
                 <div class="typing-indicator" id="typingIndicator" style="padding: 0 20px;">Sportify is typing...</div>
@@ -57,7 +57,16 @@
         chatbotWindow.classList.remove('active');
     });
 
-    function sendMessage() {
+    function getSessionId() {
+        const key = 'sportify_session_id';
+        const existing = localStorage.getItem(key);
+        if (existing) return existing;
+        const fresh = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+        localStorage.setItem(key, fresh);
+        return fresh;
+    }
+
+    async function sendMessage() {
         const text = chatInput.value.trim();
         if (text === '') return;
 
@@ -65,11 +74,22 @@
         chatInput.value = '';
 
         showTyping(true);
-        setTimeout(() => {
-            const response = getBotResponse(text);
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, sessionId: getSessionId() })
+            });
+            const data = await res.json();
+            const response = data.reply || 'Thanks! I will get back with details.';
+            showTyping(false);
+            appendMessage(limitWords(response), 'bot');
+        } catch (err) {
+            // Fallback to local logic if network fails
+            const response = limitWords(getBotResponse(text));
             showTyping(false);
             appendMessage(response, 'bot');
-        }, 500);
+        }
     }
 
     function appendMessage(text, sender) {
@@ -97,12 +117,13 @@
     }
 
     function detectTime(query) {
-        const timeMatch = query.match(
-            /\b((1[0-2]|0?[1-9]):[0-5][0-9]\s?(am|pm))\b|\b((1[0-2]|0?[1-9])\s?(am|pm))\b|\b((2[0-3]|[0-1]?[0-9]):[0-5][0-9])\b|\b((2[0-3]|[0-1]?[0-9])\s?(hrs|hours))\b/i
+        const normalized = query.replace(/\./g, ':'); // support inputs like 12.00
+        const timeMatch = normalized.match(
+            /\b((1[0-2]|0?[1-9]):[0-5][0-9]\s?(am|pm))\b|\b((1[0-2]|0?[1-9])\s?(am|pm))\b|\b((2[0-3]|[0-1]?[0-9]):[0-5][0-9])\b|\b((2[0-3]|1[0-9]|0?[0-9])\b)(?!:)/i
         );
         if (!timeMatch) return null;
         const groups = timeMatch.slice(1).filter(Boolean);
-        return groups.length ? groups[0] : null;
+        return groups.length ? groups[0].trim() : null;
     }
 
     function resetBooking() {
@@ -110,6 +131,12 @@
         convoState.sport = null;
         convoState.date = null;
         convoState.time = null;
+    }
+
+    function limitWords(text, maxWords = 90) {
+        const words = text.trim().split(/\s+/);
+        if (words.length <= maxWords) return text.trim();
+        return words.slice(0, maxWords).join(' ') + '...';
     }
 
     function capitalize(text) {
@@ -142,7 +169,7 @@
     function confirmedResponse() {
         const summary = `Sport - ${convoState.sport}; Date - ${convoState.date}; Time - ${convoState.time}`;
         resetBooking();
-        return `${summary} noted. Go to Grounds > choose your venue > tap "Book Now" to pay and finalize. Need help picking a ground in Angondhalli, Bangalore? I can suggest top options.`;
+        return `${summary} noted. Go to Grounds, pick your venue, tap "Book Now" to pay and finalize. Need suggestions in Angondhalli, Bangalore? I can share top options.`;
     }
 
     function shortHelp() {
