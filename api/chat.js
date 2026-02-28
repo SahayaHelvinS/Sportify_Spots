@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { createClient } = require('@supabase/supabase-js');
 const { getDb, collections } = require('../lib/db');
 
 const SPORTS = ['cricket', 'football', 'badminton', 'basketball', 'tennis', 'multi-sport', 'multi sport'];
@@ -9,11 +10,6 @@ Follow this flow: greet briefly; ask how to help; when booking ask sport -> date
 If user confirms and slot is unavailable, clearly say so and offer another time.
 `;
 import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 function extractDetails(text) {
     const lower = text.toLowerCase();
@@ -27,6 +23,15 @@ function extractDetails(text) {
         isConfirm: /(confirm|book now|yes, book|yes book|proceed)/i.test(text)
     };
 }
+
+// Supabase client (used to mirror bookings/slots)
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 module.exports = async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -63,14 +68,49 @@ module.exports = async function handler(req, res) {
         const { sport, date, time, isConfirm } = extractDetails(joined);
 
         if (isConfirm && sport && date && time) {
+            // Check Mongo slot
             const slot = await slotsCol.findOne({ sport, date, time });
-            if (!slot || slot.available === false) {
+
+            // Check Supabase slot if available
+            let supabaseSlot = null;
+            if (supabase) {
+                const { data: sData } = await supabase
+                    .from('slots')
+                    .select('available')
+                    .eq('sport', sport)
+                    .eq('date', date)
+                    .eq('time', time)
+                    .maybeSingle();
+                supabaseSlot = sData;
+            }
+
+            const unavailableMongo = slot && slot.available === false;
+            const unavailableSupabase = supabaseSlot && supabaseSlot.available === false;
+
+            if (unavailableMongo || unavailableSupabase) {
                 const reply = `That slot is unavailable. Want another time for ${sport} on ${date}?`;
                 await convoCol.insertOne({ sessionId, role: 'assistant', content: reply, ts: new Date() });
                 return res.status(200).json({ reply });
             }
+
+            // Mark unavailable in both DBs
             await slotsCol.updateOne({ sport, date, time }, { $set: { available: false } }, { upsert: true });
+            if (supabase) {
+                await supabase.from('slots').upsert({ sport, date, time, available: false });
+            }
+
+            // Save booking
             await bookingsCol.insertOne({ sessionId, sport, date, time, bookedAt: new Date() });
+            if (supabase) {
+                await supabase.from('bookings').insert({
+                    session_id: sessionId,
+                    sport,
+                    date,
+                    time,
+                    status: 'confirmed'
+                });
+            }
+
             const reply = `Booked: ${sport} on ${date} at ${time}. Please complete payment to finalize. Slots are limited.`;
             await convoCol.insertOne({ sessionId, role: 'assistant', content: reply, ts: new Date() });
             return res.status(200).json({ reply });
