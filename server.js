@@ -11,6 +11,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const requiredEnv = ['SUPABASE_URL', 'SUPABASE_KEY', 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'GEMINI_API_KEY'];
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -23,16 +24,43 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_KEY_SECRET'
 });
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Initialize Gemini AI when key exists
+const geminiKey = process.env.GEMINI_API_KEY;
+let model = null;
+if (geminiKey) {
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+} else {
+    console.warn("GEMINI_API_KEY missing: /api/chatbot will return 503 until set.");
+}
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'css, js, Image')));
+app.use(express.static(path.join(__dirname, 'css')));
+app.use(express.static(path.join(__dirname, 'js')));
+app.use(express.static(path.join(__dirname, 'Image')));
 app.use(express.static(__dirname)); // Serve HTML files from root
+
+// Health check with env validation
+function envReport() {
+    const missing = requiredEnv.filter((key) => !process.env[key]);
+    return {
+        status: missing.length ? 'degraded' : 'ok',
+        missing
+    };
+}
+
+app.get('/health', (req, res) => {
+    const envStatus = envReport();
+    res.status(envStatus.status === 'ok' ? 200 : 500).json({
+        status: envStatus.status,
+        missingEnv: envStatus.missing,
+        uptimeSeconds: Math.round(process.uptime()),
+        timestamp: new Date().toISOString()
+    });
+});
 
 // ============ RAZORPAY ENDPOINTS ============
 
@@ -633,6 +661,13 @@ app.post('/api/chatbot', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Message is required'
+            });
+        }
+
+        if (!model) {
+            return res.status(503).json({
+                success: false,
+                message: 'AI assistant unavailable: GEMINI_API_KEY not set'
             });
         }
 

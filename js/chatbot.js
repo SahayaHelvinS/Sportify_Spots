@@ -1,11 +1,19 @@
-/* Chatbot Logic */
+/* Chatbot Logic for Sportify Spots */
 (function() {
-    // Create Chatbot HTML Structure
+    // Conversation state keeps the guided booking steps on track
+    const convoState = {
+        mode: 'idle',
+        sport: null,
+        date: null,
+        time: null
+    };
+
+    // Build Chatbot UI
     const chatbotHTML = `
         <div class="chatbot-container">
             <div class="chatbot-button" id="chatbotBtn">
                 <svg viewBox="0 0 24 24">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c-1.1 0-2-.9-2-2z"/>
                 </svg>
             </div>
             <div class="chatbot-window" id="chatbotWindow">
@@ -15,7 +23,7 @@
                 </div>
                 <div class="chatbot-messages" id="chatbotMessages">
                     <div class="message bot-message">
-                        Hello! 👋 Welcome to Sportify Spots. How can I help you today?
+                        Hi! Welcome to Sportify Spots, Angondhalli. How can I help? (Book a ground / Check availability / Pricing / Location / FAQs)
                     </div>
                 </div>
                 <div class="typing-indicator" id="typingIndicator" style="padding: 0 20px;">Sportify is typing...</div>
@@ -31,10 +39,8 @@
         </div>
     `;
 
-    // Append to body
     document.body.insertAdjacentHTML('beforeend', chatbotHTML);
 
-    // Elements
     const chatbotBtn = document.getElementById('chatbotBtn');
     const chatbotWindow = document.getElementById('chatbotWindow');
     const closeChat = document.getElementById('closeChat');
@@ -43,7 +49,6 @@
     const messagesContainer = document.getElementById('chatbotMessages');
     const typingIndicator = document.getElementById('typingIndicator');
 
-    // Toggle Chatbot
     chatbotBtn.addEventListener('click', () => {
         chatbotWindow.classList.toggle('active');
     });
@@ -52,22 +57,19 @@
         chatbotWindow.classList.remove('active');
     });
 
-    // Send Message Function
     function sendMessage() {
         const text = chatInput.value.trim();
-        if (text === "") return;
+        if (text === '') return;
 
-        // User Message
         appendMessage(text, 'user');
-        chatInput.value = "";
+        chatInput.value = '';
 
-        // Bot Response
         showTyping(true);
         setTimeout(() => {
             const response = getBotResponse(text);
             showTyping(false);
             appendMessage(response, 'bot');
-        }, 1000);
+        }, 500);
     }
 
     function appendMessage(text, sender) {
@@ -83,32 +85,108 @@
         typingIndicator.style.display = show ? 'block' : 'none';
     }
 
-    function getBotResponse(input) {
-        const query = input.toLowerCase();
-        
-        if (query.includes('hello') || query.includes('hi')) {
-            return "Hi there! I'm your Sportify Spots assistant. You can ask me about ground bookings, membership, or locations.";
-        }
-        if (query.includes('ground') || query.includes('book')) {
-            return "We have various grounds for Cricket, Football, Badminton, and more. You can check them out on our 'Grounds' page!";
-        }
-        if (query.includes('membership') || query.includes('pro')) {
-            return "We offer PRO (10% discount) and PRO PLUS (20% discount) plans. Check the 'Membership' page for more details!";
-        }
-        if (query.includes('price') || query.includes('cost')) {
-            return "Prices vary by ground and time slot. Generally, they range from ₹500 to ₹2000 per hour.";
-        }
-        if (query.includes('location') || query.includes('city')) {
-            return "We have grounds in Chennai, Bangalore, Hyderabad, Mumbai, Delhi, and many other cities!";
-        }
-        if (query.includes('contact') || query.includes('support')) {
-            return "You can reach our support team at support@sportifyspots.com or call us at +91-9876543210.";
-        }
-        
-        return "I'm not sure I understand. Could you please rephrase? You can ask about 'grounds', 'membership', or 'pricing'.";
+    function detectSport(query) {
+        const sports = ['cricket', 'football', 'badminton', 'basketball', 'tennis', 'multi-sport', 'multi sport'];
+        const found = sports.find(s => query.includes(s));
+        return found ? (found === 'multi sport' ? 'Multi-Sport' : capitalize(found)) : null;
     }
 
-    // Event Listeners
+    function detectDate(query) {
+        const dateMatch = query.match(/(\d{4}-\d{2}-\d{2}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+        return dateMatch ? dateMatch[1] : null;
+    }
+
+    function detectTime(query) {
+        const timeMatch = query.match(
+            /\b((1[0-2]|0?[1-9]):[0-5][0-9]\s?(am|pm))\b|\b((1[0-2]|0?[1-9])\s?(am|pm))\b|\b((2[0-3]|[0-1]?[0-9]):[0-5][0-9])\b|\b((2[0-3]|[0-1]?[0-9])\s?(hrs|hours))\b/i
+        );
+        if (!timeMatch) return null;
+        const groups = timeMatch.slice(1).filter(Boolean);
+        return groups.length ? groups[0] : null;
+    }
+
+    function resetBooking() {
+        convoState.mode = 'idle';
+        convoState.sport = null;
+        convoState.date = null;
+        convoState.time = null;
+    }
+
+    function capitalize(text) {
+        return text.replace(/(^\w|\s\w)/g, m => m.toUpperCase());
+    }
+
+    function bookingFlowResponse(query) {
+        const detectedSport = detectSport(query);
+        const detectedDate = detectDate(query);
+        const cleanedForTime = detectedDate ? query.replace(detectedDate, ' ') : query;
+        const detectedTime = detectTime(cleanedForTime);
+
+        if (detectedSport) convoState.sport = convoState.sport || detectedSport;
+        if (detectedDate) convoState.date = convoState.date || detectedDate;
+        if (detectedTime) convoState.time = convoState.time || detectedTime;
+
+        if (!convoState.sport) {
+            return 'Great, let us book your slot. Which sport? Options: Cricket, Football, Badminton, Basketball, Tennis, Multi-Sport.';
+        }
+        if (!convoState.date) {
+            return `Sport: ${convoState.sport}. What date suits you? (e.g., YYYY-MM-DD)`;
+        }
+        if (!convoState.time) {
+            return `Sport: ${convoState.sport} on ${convoState.date}. Preferred time slot? (e.g., 6:00 PM)`;
+        }
+
+        return `Please confirm: Sport - ${convoState.sport}; Date - ${convoState.date}; Time - ${convoState.time}. Reply "confirm" to proceed. Slots are limited.`;
+    }
+
+    function confirmedResponse() {
+        const summary = `Sport - ${convoState.sport}; Date - ${convoState.date}; Time - ${convoState.time}`;
+        resetBooking();
+        return `${summary} noted. Go to Grounds > choose your venue > tap "Book Now" to pay and finalize. Need help picking a ground in Angondhalli, Bangalore? I can suggest top options.`;
+    }
+
+    function shortHelp() {
+        return 'I handle ground booking, availability, pricing, and location for Sportify Spots. Tell me the sport, date, and time to book.';
+    }
+
+    function getBotResponse(input) {
+        const query = input.toLowerCase();
+        const sportDetected = detectSport(query);
+        const wantsBooking = ['book', 'booking', 'reserve', 'slot', 'availability', 'ground', 'play'].some(k => query.includes(k));
+
+        if (sportDetected) {
+            convoState.sport = convoState.sport || sportDetected;
+            convoState.mode = 'booking';
+        } else if (wantsBooking) {
+            convoState.mode = 'booking';
+        }
+
+        if (convoState.mode === 'booking') {
+            if (query.includes('confirm') && convoState.sport && convoState.date && convoState.time) {
+                return confirmedResponse();
+            }
+            return bookingFlowResponse(query);
+        }
+
+        if (query.includes('price') || query.includes('pricing')) {
+            return 'Typical rates: Rs 800 to Rs 2000 per hour depending on sport, turf, and time. Membership cuts 10-20%. Want me to check a slot for you?';
+        }
+        if (query.includes('membership') || query.includes('plan')) {
+            return 'We offer PRO (10% off) and PRO PLUS (20% off). You get priority slots and savings on every booking. Ready to book with a plan?';
+        }
+        if (query.includes('location') || query.includes('where')) {
+            return 'We operate in Angondhalli, Bangalore and nearby turfs. Need directions to a specific ground?';
+        }
+        if (query.includes('faq') || query.includes('help')) {
+            return shortHelp();
+        }
+        if (query.includes('hi') || query.includes('hello') || query.includes('hey')) {
+            return 'Hi! I can book Cricket, Football, Badminton, Basketball, Tennis, or Multi-Sport. Shall I start a booking?';
+        }
+
+        return 'I focus on Sportify Spots bookings. Tell me the sport, date, and preferred time, and I will guide you to payment.';
+    }
+
     sendChat.addEventListener('click', sendMessage);
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
